@@ -1,0 +1,139 @@
+name: Build Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/build-windows.yml'
+      - 'lib/**'
+      - 'assets/**'
+      - 'windows/**'
+      - 'test/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'analysis_options.yaml'
+      - 'gummy_calculator/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gummy-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Build portable Windows app
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Download project
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Locate Flutter project
+        id: project
+        run: |
+          if (Test-Path 'pubspec.yaml') {
+            $project = '.'
+          } elseif (Test-Path 'gummy_calculator/pubspec.yaml') {
+            $project = 'gummy_calculator'
+          } else {
+            throw 'Upload the extracted project files, including pubspec.yaml. Uploading only the ZIP is not enough.'
+          }
+          "directory=$project" >> $env:GITHUB_OUTPUT
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Install dependencies
+        working-directory: ${{ steps.project.outputs.directory }}
+        run: flutter pub get --enforce-lockfile
+
+      - name: Check code
+        working-directory: ${{ steps.project.outputs.directory }}
+        run: flutter analyze
+
+      - name: Run tests
+        working-directory: ${{ steps.project.outputs.directory }}
+        run: flutter test
+
+      - name: Build Windows executable
+        working-directory: ${{ steps.project.outputs.directory }}
+        run: flutter build windows --release
+
+      - name: Package app and runtime libraries
+        working-directory: ${{ steps.project.outputs.directory }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release = Join-Path (Get-Location) 'build/windows/x64/runner/Release'
+          if (!(Test-Path (Join-Path $release 'gummy_calculator.exe'))) {
+            throw 'The Windows executable was not produced.'
+          }
+          $bundle = Join-Path $env:GITHUB_WORKSPACE 'dist/Gummy-Windows'
+          New-Item -ItemType Directory -Force -Path $bundle | Out-Null
+          Copy-Item -Path "$release/*" -Destination $bundle -Recurse -Force
+
+          # Ship the official application-local C++ runtime with the executable.
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          if (!(Test-Path $vswhere)) { throw 'Visual Studio locator is missing.' }
+          $vsRoot = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$vsRoot) { throw 'The Visual Studio C++ toolchain was not found.' }
+          $redistRoot = Join-Path $vsRoot 'VC/Redist/MSVC'
+          $crt = Get-ChildItem -Path "$redistRoot/*/x64/Microsoft.VC143.CRT" -Directory |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (!$crt) { throw 'The redistributable Visual C++ runtime was not found.' }
+          Copy-Item -Path "$($crt.FullName)/*.dll" -Destination $bundle -Force
+
+          Copy-Item -Path 'LICENSE' -Destination (Join-Path $bundle 'LICENSE.txt')
+          Copy-Item -Path 'assets/fonts/OFL.txt' -Destination (Join-Path $bundle 'Manrope-LICENSE.txt')
+          @'
+          Gummy - Windows x64
+
+          Run gummy_calculator.exe in this folder.
+          Keep all DLL files and the data folder beside the executable.
+          Flutter, Git and Visual Studio are not needed on the target computer.
+
+          Visual C++ runtime files are provided by Microsoft and distributed
+          under the Microsoft Visual Studio redistributable terms.
+          https://visualstudio.microsoft.com/license-terms/
+          '@ | Set-Content -Path (Join-Path $bundle 'START-HERE.txt') -Encoding utf8
+
+          foreach ($name in @('gummy_calculator.exe', 'flutter_windows.dll', 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'data')) {
+            if (!(Test-Path (Join-Path $bundle $name))) { throw "Missing required bundle item: $name" }
+          }
+
+      - name: Upload ready-to-run app
+        id: artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: Gummy-Windows-x64
+          path: dist/Gummy-Windows/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Show download instructions
+        env:
+          GUMMY_ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+        run: |
+          @"
+          ## Gummy is ready
+
+          [Download the Windows app]($env:GUMMY_ARTIFACT_URL)
+
+          Extract the entire archive and run **gummy_calculator.exe**.
+          Keep the DLLs and **data/** beside the executable.
+          You do not need Flutter or Visual Studio to run this build.
+          "@ >> $env:GITHUB_STEP_SUMMARY

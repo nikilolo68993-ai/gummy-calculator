@@ -98,130 +98,135 @@ class _JellyButtonState extends State<JellyButton>
   Widget build(BuildContext context) {
     final base = widget.color ?? const Color(0xFFEDE8F0);
     final active = _hover || _focused;
-    return Semantics(
-      button: true,
-      label: widget.semanticLabel ?? widget.label,
-      child: Tooltip(
-        message: widget.semanticLabel ?? widget.label,
-        waitDuration: const Duration(milliseconds: 650),
-        child: FocusableActionDetector(
-          mouseCursor: SystemMouseCursors.click,
-          onShowFocusHighlight: (value) => setState(() => _focused = value),
-          actions: {
-            ActivateIntent: CallbackAction<ActivateIntent>(
-              onInvoke: (_) {
-                _bounce();
-                widget.onPressed();
-                return null;
-              },
-            ),
-          },
-          child: MouseRegion(
-            onEnter: (_) => setState(() => _hover = true),
-            onExit: (_) => setState(() {
-              _hover = false;
-              _highlight = const Alignment(-0.5, -0.8);
-            }),
-            onHover: (event) {
-              if (_reduceMotion) return;
-              final box = context.findRenderObject() as RenderBox;
-              setState(
-                () => _highlight = Alignment(
-                  (event.localPosition.dx / box.size.width * 2 - 1).clamp(
-                    -1.0,
-                    1.0,
-                  ),
-                  (event.localPosition.dy / box.size.height * 2 - 1).clamp(
-                    -1.0,
-                    1.0,
-                  ),
-                ),
-              );
+    return RepaintBoundary(
+      child: Semantics(
+        button: true,
+        label: widget.semanticLabel ?? widget.label,
+        child: Tooltip(
+          message: widget.semanticLabel ?? widget.label,
+          waitDuration: const Duration(milliseconds: 650),
+          child: FocusableActionDetector(
+            mouseCursor: SystemMouseCursors.click,
+            onShowFocusHighlight: (value) => setState(() => _focused = value),
+            actions: {
+              ActivateIntent: CallbackAction<ActivateIntent>(
+                onInvoke: (_) {
+                  _bounce();
+                  widget.onPressed();
+                  return null;
+                },
+              ),
             },
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: (_) => _press(true),
-              onTapUp: (_) => _press(false),
-              onTapCancel: () => _press(false),
-              onTap: widget.onPressed,
-              child: AnimatedBuilder(
-                animation: _spring,
-                builder: (context, _) {
-                  final wobble = _reduceMotion ? 0.0 : _spring.value;
-                  final squash = 1 - wobble * 0.11;
-                  final stretch = 1 + wobble * 0.055;
-                  final tilt = _reduceMotion
-                      ? 0.0
-                      : (active ? _highlight.x * 0.025 : 0.0) +
-                            math.sin(wobble * 2.4) * 0.016;
-                  return Transform.translate(
-                    offset: Offset(
-                      0,
-                      wobble * 4 - (active && !_reduceMotion ? 3 : 0),
+            child: MouseRegion(
+              onEnter: (_) => setState(() => _hover = true),
+              onExit: (_) => setState(() {
+                _hover = false;
+                _highlight = const Alignment(-0.5, -0.8);
+              }),
+              onHover: (event) {
+                if (_reduceMotion) return;
+                final box = context.findRenderObject() as RenderBox;
+                setState(
+                  () => _highlight = Alignment(
+                    (event.localPosition.dx / box.size.width * 2 - 1).clamp(
+                      -1.0,
+                      1.0,
                     ),
-                    child: Transform(
-                      alignment: Alignment.center,
-                      transform: Matrix4.identity()
-                        ..rotateZ(tilt)
-                        ..scaleByDouble(stretch, squash, 1, 1),
-                      child: AnimatedContainer(
-                        duration: _reduceMotion
-                            ? Duration.zero
-                            : const Duration(milliseconds: 180),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(
-                            widget.small ? 17 : 25,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Color.lerp(
-                                base,
-                                Flavor.ink,
-                                0.45,
-                              )!.withValues(alpha: active ? 0.19 : 0.11),
-                              offset: Offset(0, active ? 9 : 5),
-                              blurRadius: active ? 18 : 9,
-                              spreadRadius: -3,
-                            ),
-                            BoxShadow(
-                              color: Colors.white.withValues(alpha: 0.95),
-                              offset: const Offset(-2, -3),
-                              blurRadius: 6,
-                              spreadRadius: -2,
-                            ),
-                          ],
+                    (event.localPosition.dy / box.size.height * 2 - 1).clamp(
+                      -1.0,
+                      1.0,
+                    ),
+                  ),
+                );
+              },
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (_) => _press(true),
+                onTapUp: (_) => _press(false),
+                onTapCancel: () => _press(false),
+                onTap: widget.onPressed,
+                child: AnimatedBuilder(
+                  animation: _spring,
+                  child: RepaintBoundary(
+                    child: AnimatedContainer(
+                      duration: _reduceMotion
+                          ? Duration.zero
+                          : const Duration(milliseconds: 180),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(
+                          widget.small ? 17 : 25,
                         ),
-                        child: CustomPaint(
-                          painter: _JellyPainter(
-                            color: base,
-                            highlight: _highlight,
-                            active: active,
-                            pressed: _pressed,
-                            small: widget.small,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color.lerp(
+                              base,
+                              Flavor.ink,
+                              0.45,
+                            )!.withValues(alpha: active ? 0.19 : 0.11),
+                            offset: Offset(0, active ? 9 : 5),
+                            blurRadius: active ? 18 : 9,
+                            spreadRadius: -3,
                           ),
-                          child: Center(
-                            child: widget.icon != null
-                                ? Icon(
-                                    widget.icon,
-                                    size: widget.small ? 19 : 24,
+                          BoxShadow(
+                            color: Colors.white.withValues(alpha: 0.95),
+                            offset: const Offset(-2, -3),
+                            blurRadius: 6,
+                            spreadRadius: -2,
+                          ),
+                        ],
+                      ),
+                      child: CustomPaint(
+                        painter: _JellyPainter(
+                          color: base,
+                          highlight: _highlight,
+                          active: active,
+                          pressed: _pressed,
+                          small: widget.small,
+                        ),
+                        child: Center(
+                          child: widget.icon != null
+                              ? Icon(
+                                  widget.icon,
+                                  size: widget.small ? 19 : 24,
+                                  color: widget.foreground,
+                                )
+                              : Text(
+                                  widget.label,
+                                  style: TextStyle(
                                     color: widget.foreground,
-                                  )
-                                : Text(
-                                    widget.label,
-                                    style: TextStyle(
-                                      color: widget.foreground,
-                                      fontSize: widget.small ? 14 : 28,
-                                      fontWeight: FontWeight.w600,
-                                      height: 1,
-                                      letterSpacing: -0.8,
-                                    ),
+                                    fontSize: widget.small ? 14 : 28,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1,
+                                    letterSpacing: -0.8,
                                   ),
-                          ),
+                                ),
                         ),
                       ),
                     ),
-                  );
-                },
+                  ),
+                  builder: (context, face) {
+                    final wobble = _reduceMotion ? 0.0 : _spring.value;
+                    final squash = 1 - wobble * 0.11;
+                    final stretch = 1 + wobble * 0.055;
+                    final tilt = _reduceMotion
+                        ? 0.0
+                        : (active ? _highlight.x * 0.025 : 0.0) +
+                              math.sin(wobble * 2.4) * 0.016;
+                    return Transform.translate(
+                      offset: Offset(
+                        0,
+                        wobble * 4 - (active && !_reduceMotion ? 3 : 0),
+                      ),
+                      child: Transform(
+                        alignment: Alignment.center,
+                        transform: Matrix4.identity()
+                          ..rotateZ(tilt)
+                          ..scaleByDouble(stretch, squash, 1, 1),
+                        child: face,
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ),

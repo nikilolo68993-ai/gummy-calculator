@@ -5,70 +5,33 @@ import 'package:flutter/material.dart';
 
 import 'flavor.dart';
 
-class CandyBackground extends StatefulWidget {
+class CandyBackground extends StatelessWidget {
   const CandyBackground({
     super.key,
     required this.flavor,
-    required this.gentle,
     required this.child,
   });
   final Flavor flavor;
-  final bool gentle;
   final Widget child;
   @override
-  State<CandyBackground> createState() => _CandyBackgroundState();
-}
-
-class _CandyBackgroundState extends State<CandyBackground>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _time = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 28),
-  );
-  bool _reduce = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _sync();
-  }
-
-  @override
-  void didUpdateWidget(CandyBackground oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _sync();
-  }
-
-  void _sync() {
-    _reduce = widget.gentle || MediaQuery.disableAnimationsOf(context);
-    if (_reduce) {
-      _time.stop();
-    } else if (!_time.isAnimating) {
-      _time.repeat();
-    }
-  }
-
-  @override
-  void dispose() {
-    _time.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _time,
-    child: widget.child,
-    builder: (context, child) => CustomPaint(
-      painter: _BackgroundPainter(widget.flavor, _reduce ? 0 : _time.value),
-      child: child,
-    ),
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.passthrough,
+    children: [
+      Positioned.fill(
+        child: IgnorePointer(
+          child: RepaintBoundary(
+            child: CustomPaint(painter: _BackgroundPainter(flavor)),
+          ),
+        ),
+      ),
+      RepaintBoundary(child: child),
+    ],
   );
 }
 
 class _BackgroundPainter extends CustomPainter {
-  _BackgroundPainter(this.flavor, this.time);
+  _BackgroundPainter(this.flavor);
   final Flavor flavor;
-  final double time;
   static final List<Offset> _grain = List.generate(
     1800,
     (i) => Offset(
@@ -81,15 +44,14 @@ class _BackgroundPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
     canvas.drawRect(rect, Paint()..color = Flavor.paper);
-    final drift = math.sin(time * math.pi * 2);
     final halos = [
       (
-        Offset(size.width * 0.47 + drift * 26, size.height * 0.53),
+        Offset(size.width * 0.47, size.height * 0.53),
         flavor.orb.withValues(alpha: 0.23),
         size.width * 0.46,
       ),
       (
-        Offset(size.width * 0.84, size.height * 0.12 + drift * 18),
+        Offset(size.width * 0.84, size.height * 0.12),
         flavor.accent.withValues(alpha: 0.12),
         size.width * 0.36,
       ),
@@ -109,19 +71,21 @@ class _BackgroundPainter extends CustomPainter {
           ]),
       );
     }
-    final grain = Paint()..color = Flavor.ink.withValues(alpha: 0.035);
-    for (final point in _grain) {
-      canvas.drawCircle(
-        Offset(point.dx * size.width, point.dy * size.height),
-        0.55,
-        grain,
-      );
-    }
+    canvas.drawPoints(
+      ui.PointMode.points,
+      [
+        for (final point in _grain)
+          Offset(point.dx * size.width, point.dy * size.height),
+      ],
+      Paint()
+        ..color = Flavor.ink.withValues(alpha: 0.035)
+        ..strokeWidth = 1.1
+        ..strokeCap = StrokeCap.round,
+    );
   }
 
   @override
-  bool shouldRepaint(_BackgroundPainter old) =>
-      old.flavor != flavor || old.time != time;
+  bool shouldRepaint(_BackgroundPainter old) => old.flavor != flavor;
 }
 
 class JellyMascot extends StatefulWidget {
@@ -144,7 +108,7 @@ class _JellyMascotState extends State<JellyMascot>
     with SingleTickerProviderStateMixin {
   late final AnimationController _time = AnimationController(
     vsync: this,
-    duration: const Duration(seconds: 6),
+    duration: const Duration(milliseconds: 900),
   );
   bool _reduce = false;
   @override
@@ -157,14 +121,16 @@ class _JellyMascotState extends State<JellyMascot>
   void didUpdateWidget(JellyMascot oldWidget) {
     super.didUpdateWidget(oldWidget);
     _sync();
+    if (!_reduce && oldWidget.revision != widget.revision) {
+      _time.forward(from: 0);
+    }
   }
 
   void _sync() {
     _reduce = widget.gentle || MediaQuery.disableAnimationsOf(context);
     if (_reduce) {
       _time.stop();
-    } else if (!_time.isAnimating) {
-      _time.repeat();
+      _time.value = 0;
     }
   }
 

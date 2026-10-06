@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -267,7 +266,6 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     child: Scaffold(
       body: CandyBackground(
         flavor: flavor,
-        gentle: gentle,
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, bounds) {
@@ -383,7 +381,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
   Widget _brand(bool compact) => Row(
     children: [
-      JellyMascot(flavor: flavor, gentle: gentle, compact: true),
+      JellyMascot(
+        flavor: flavor,
+        gentle: gentle,
+        compact: true,
+        revision: calc.resultRevision,
+      ),
       const SizedBox(width: 9),
       const Text(
         'gummy',
@@ -708,10 +711,9 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     ),
   );
 
-  Widget _display() => ClipRRect(
-    borderRadius: BorderRadius.circular(24),
-    child: BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+  Widget _display() => RepaintBoundary(
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(24),
       child: AnimatedContainer(
         duration: gentle ? Duration.zero : const Duration(milliseconds: 350),
         height: 170,
